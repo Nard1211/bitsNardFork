@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Attendance {
+  id           Int       @id @default(autoincrement())
+  employeeId   Int
+  date         DateTime
+  checkInTime       DateTime
+  checkOutTime      DateTime?
+  checkin_updated   DateTime?
+  checkout_updated  DateTime?
+  status            String    @default("present")
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model AttendanceLog {
+  id         Int      @id @default(autoincrement())
+  timestamp  DateTime
+  status     Int
+  employeeId Int
+  deviceId   Int?
+  createdAt  DateTime @default(now())
+  Device     Device?  @relation(fields: [deviceId], references: [id])
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([timestamp, employeeId])
+  @@index([deviceId])
+  @@index([employeeId])
+  @@index([timestamp])
+}
+
+model Department {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  Employee  Employee[]
+}
+
+model Branch {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  Employee  Employee[]
+}
+
+model Device {
+  id            Int             @id @default(autoincrement())
+  name          String
+  ip            String          @unique
+  port          Int             @default(4370)
+  location      String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  AttendanceLog AttendanceLog[]
+
+  @@index([isActive])
+}
+
+model Employee {
+  id               Int              @id @default(autoincrement())
+  zkId             Int?             @unique
+  firstName        String
+  lastName         String
+  role             Role             @default(USER)
+  email            String?          @unique
+  password         String?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+
+  // Secondary Info
+  department     String?
+  position       String?
+  branch         String?
+  contactNumber  String?
+  employeeNumber String?   @unique
+  hireDate       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime
+
+  // Relations (Unused for now)
+  departmentId  Int?
+  branchId      Int?
+  shiftId       Int?
+  Attendance    Attendance[]
+  AttendanceLog AttendanceLog[]
+  Department    Department?     @relation(fields: [departmentId], references: [id])
+  Branch        Branch?         @relation(fields: [branchId], references: [id])
+  Shift         Shift?          @relation(fields: [shiftId], references: [id])
+
+  @@index([departmentId])
+  @@index([branchId])
+  @@index([email])
+  @@index([employeeNumber])
+  @@index([employmentStatus])
+  @@index([role])
+}
+
+model Shift {
+  id        Int        @id @default(autoincrement())
+  name      String
+  startTime String
+  endTime   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  Employee  Employee[]
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+}
+
+enum Role {
+  USER
+  ADMIN
+  HR
+}

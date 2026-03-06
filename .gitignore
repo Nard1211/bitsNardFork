@@ -1,0 +1,6 @@
+frontend/
+backend_debug.log
+test_register.ps1
+package-lock.json
+docker-compose.yml
+README.md
