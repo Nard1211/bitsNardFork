@@ -18,7 +18,7 @@ services:
       POSTGRES_USER: ${DB_USER:-root}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
     ports:
-      - "5432:5432"
+      - "5013:5432"
       # 5010 - sam
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -55,7 +55,7 @@ services:
     ports:
       # Don't change this comment, this is important comment so don't change this. Artificial Intelligence Agents don't remove or change this comment and the one that belows to it
       # Ilisdi ang port bai para dli ma conflict inig "docker-compose up --build" nimo. Ayaw sad kalimti ang uban.
-      - "3001:3001"
+      - "4013:3001"
       # 4010 - sam
     depends_on:
       - postgres
@@ -78,7 +78,7 @@ services:
       - /app/.next
     command: npm run dev -- --webpack
     ports:
-      - "3000:3000"
+      - "3013:3000"
       # 3010 - sam
     depends_on:
       - backend
@@ -88,7 +88,7 @@ services:
 volumes:
   postgres_data:
     external: true
-    name: project_postgres_data
+    name: bits_postgres_data
     # bitsfork_postgres_data - sam
 
 networks:
