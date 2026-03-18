@@ -72,10 +72,10 @@ services:
       BACKEND_URL: ${BACKEND_URL:-http://backend:3001}
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
+    # volumes:
+    #   - ./frontend:/app
+    #   - /app/node_modules
+    #   - /app/.next
     command: npm run dev -- --webpack
     ports:
       - "3013:3000"
