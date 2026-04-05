@@ -1157,7 +1157,19 @@ export const enrollEmployeeFingerprint = async (
     }
 
     if (!employee.zkId) {
-        return { success: false, message: `Employee ${employeeId} has no zkId assigned.` };
+        // Auto-assign zkid for imported employees at enrollment time
+        const release = await acquireRegistrationMutex();
+        try {
+            const nextZkId = await findNextSafeZkId();
+            const updated = await prisma.employee.update({
+                where: { id: employeeId },
+                data: { zkId: nextZkId, updatedAt: new Date() },
+            });
+            employee.zkId = nextZkId;
+            console.log(`[Enrollment] Auto-assigned zkId=${nextZkId} to employee ${employeeId} (${employee.firstName} ${employee.lastName}).`);
+        } finally {
+            release();
+        }
     }
 
     // 2. Resolve which device to use

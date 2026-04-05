@@ -10,12 +10,13 @@ import {
     updateEmployee,
     permanentDeleteEmployee,
     resetEmployeePassword,
-    checkEmailAvailability
+    checkEmailAvailability,
+    importEmployees
 } from '../controllers/employee.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { adminOrHR } from '../middleware/role.middleware';
 import { validate } from '../middleware/validation.middleware';
-import { createEmployeeValidator, employeeQueryValidator, enrollFingerprintValidator, enrollCardValidator } from '../validators/employee.validator';
+import { createEmployeeValidator, employeeQueryValidator, enrollFingerprintValidator, enrollCardValidator, importEmployeesValidator } from '../validators/employee.validator';
 
 const router = Router();
 
@@ -102,6 +103,66 @@ router.get('/', validate(employeeQueryValidator), getAllEmployees);
  *         description: Employee created successfully
  */
 router.post('/', validate(createEmployeeValidator), createEmployee);
+
+/**
+ * @swagger
+ * /api/employees/import:
+ *   post:
+ *     summary: Bulk import employees from spreadsheet data
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - employees
+ *             properties:
+ *               employees:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - firstName
+ *                     - lastName
+ *     responses:
+ *       200:
+ *         description: Import results with successes and errors
+ */
+router.post('/import', validate(importEmployeesValidator), importEmployees);
+
+/**
+ * @swagger
+ * /api/employees/import:
+ *   post:
+ *     summary: Bulk import employees from spreadsheet data
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - employees
+ *             properties:
+ *               employees:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - firstName
+ *                     - lastName
+ *     responses:
+ *       200:
+ *         description: Import results with successes and errors
+ */
+router.post('/import', validate(importEmployeesValidator), importEmployees);
 
 /**
  * @swagger

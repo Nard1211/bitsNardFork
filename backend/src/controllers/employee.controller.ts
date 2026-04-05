@@ -1011,3 +1011,159 @@ export const checkEmailAvailability = async (req: Request, res: Response) => {
         });
     }
 };
+
+// POST /api/employees/import - Bulk import employees from spreadsheet
+export const importEmployees = async (req: Request, res: Response) => {
+    try {
+        const { employees } = req.body;
+
+        if (!Array.isArray(employees) || employees.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'employees must be a non-empty array',
+            });
+        }
+
+        const imported: Array<{ id: number; firstName: string; lastName: string; email: string | null; employeeNumber: string | null }> = [];
+        const errors: Array<{ row: number; data: any; errors: string[] }> = [];
+
+        // Collect all emails and employeeNumbers from the batch for intra-batch duplicate detection
+        const batchEmails = new Map<string, number>();
+        const batchEmpIds = new Map<string, number>();
+
+        for (let i = 0; i < employees.length; i++) {
+            const emp = employees[i];
+            const rowNum = i + 1;
+            const rowErrors: string[] = [];
+
+            if (!emp.firstName || !emp.firstName.trim()) rowErrors.push('First Name is required');
+            if (!emp.lastName || !emp.lastName.trim()) rowErrors.push('Last Name is required');
+
+            const email = emp.email ? String(emp.email).trim() : null;
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                rowErrors.push('Invalid email format');
+            }
+
+            const employeeNumber = emp.employeeNumber ? String(emp.employeeNumber).trim() : null;
+            if (employeeNumber) {
+                const empIdValidation = validateEmployeeId(employeeNumber);
+                if (!empIdValidation.isValid) {
+                    rowErrors.push(empIdValidation.error || 'Invalid Employee Number');
+                }
+            }
+
+            const role = emp.role || 'USER';
+            if (!['USER', 'ADMIN', 'HR'].includes(role)) {
+                rowErrors.push('Invalid role. Must be USER, ADMIN, or HR');
+            }
+
+            const employmentStatus = emp.employmentStatus || 'ACTIVE';
+            if (!['ACTIVE', 'INACTIVE', 'TERMINATED'].includes(employmentStatus)) {
+                rowErrors.push('Invalid employment status');
+            }
+
+            if (email) {
+                const lowerEmail = email.toLowerCase();
+                if (batchEmails.has(lowerEmail)) {
+                    rowErrors.push(`Duplicate email in batch (also on row ${batchEmails.get(lowerEmail)! + 1})`);
+                } else {
+                    batchEmails.set(lowerEmail, i);
+                }
+            }
+            if (employeeNumber) {
+                if (batchEmpIds.has(employeeNumber)) {
+                    rowErrors.push(`Duplicate Employee Number in batch (also on row ${batchEmpIds.get(employeeNumber)! + 1})`);
+                } else {
+                    batchEmpIds.set(employeeNumber, i);
+                }
+            }
+
+            if (rowErrors.length > 0) {
+                errors.push({ row: i, data: emp, errors: rowErrors });
+                continue;
+            }
+
+            const existingConditions: any[] = [];
+            if (email) existingConditions.push({ email });
+            if (employeeNumber) existingConditions.push({ employeeNumber });
+
+            if (existingConditions.length > 0) {
+                const existing = await prisma.employee.findFirst({
+                    where: { OR: existingConditions },
+                    select: { email: true, employeeNumber: true },
+                });
+
+                if (existing) {
+                    const dupField = existing.email === email ? 'email address' : 'employee number';
+                    errors.push({ row: i, data: emp, errors: [`This ${dupField} is already in use by another employee`] });
+                    continue;
+                }
+            }
+
+            const generatedPassword = generateRandomPassword(10);
+            const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+
+            try {
+                const newEmployee = await prisma.employee.create({
+                    data: {
+                        firstName: emp.firstName.trim(),
+                        lastName: emp.lastName.trim(),
+                        middleName: emp.middleName ? String(emp.middleName).trim() : null,
+                        suffix: emp.suffix ? String(emp.suffix).trim() : null,
+                        gender: emp.gender ? String(emp.gender).trim() : null,
+                        dateOfBirth: emp.dateOfBirth ? new Date(emp.dateOfBirth) : null,
+                        email: email || null,
+                        password: hashedPassword,
+                        role: role as any,
+                        department: emp.department ? String(emp.department).trim() : null,
+                        position: emp.position ? String(emp.position).trim() : null,
+                        branch: emp.branch ? String(emp.branch).trim() : null,
+                        contactNumber: emp.contactNumber ? String(emp.contactNumber).trim() : null,
+                        employeeNumber: employeeNumber || null,
+                        hireDate: emp.hireDate ? new Date(emp.hireDate) : null,
+                        employmentStatus: employmentStatus as any,
+                        zkId: null,
+                        shiftId: emp.shiftId ? parseInt(emp.shiftId, 10) : null,
+                        needsPasswordChange: true,
+                        updatedAt: new Date(),
+                    },
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeNumber: true,
+                    },
+                });
+
+                imported.push(newEmployee);
+
+                await audit({
+                    action: 'IMPORT',
+                    entityType: 'Employee',
+                    entityId: newEmployee.id,
+                    performedBy: req.user?.employeeId,
+                    details: `Imported employee ${newEmployee.firstName} ${newEmployee.lastName} via bulk import`,
+                    metadata: { category: 'employee', email: newEmployee.email, employeeNumber: newEmployee.employeeNumber },
+                });
+            } catch (createErr: any) {
+                console.error(`[Import] Failed to create employee row ${rowNum}:`, createErr.message);
+                errors.push({ row: i, data: emp, errors: [`Database error: ${createErr.message}`] });
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Import complete: ${imported.length} imported, ${errors.length} failed`,
+            imported,
+            errors,
+        });
+    } catch (error: any) {
+        console.error('Error importing employees:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to import employees',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+        });
+    }
+};

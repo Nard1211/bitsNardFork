@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Search, Plus, Edit2, ChevronLeft, ChevronRight, Upload, AlertTriangle, AlertCircle, X as XIcon, Fingerprint, CheckCircle2, WifiOff, Timer, Loader2, Key, CreditCard } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { departmentsApi, branchesApi } from '@/lib/api'
 import type { Department, Branch } from '@/lib/api'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
@@ -111,6 +112,7 @@ export default function EmployeesPage() {
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: any[]; errors: any[] } | null>(null)
 
   // Edit employee
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
@@ -202,6 +204,91 @@ export default function EmployeesPage() {
       setEnrollStatus(prev => ({ ...prev, [employeeId]: 'error' }))
       setEnrollMsg(prev => ({ ...prev, [employeeId]: 'Network error' }))
       showToast('error', 'Enrollment Failed', 'Could not reach the server')
+    }
+  }
+
+
+
+  const downloadTemplate = () => {
+    const headers = [
+      'First Name', 'Last Name', 'Middle Name', 'Suffix', 'Gender',
+      'Date of Birth', 'Email', 'Role', 'Department', 'Position',
+      'Branch', 'Contact Number', 'Employee Number', 'Hire Date',
+      'Employment Status', 'Shift ID'
+    ]
+    const exampleRow = [
+      'John', 'Doe', 'Smith', 'Jr.', 'Male',
+      '1990-01-15', 'john@example.com', 'USER', 'Engineering', 'Developer',
+      'Main Office', '09123456789', 'EMP-001', '2024-01-15',
+      'ACTIVE', ''
+    ]
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, exampleRow])
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Employees')
+    XLSX.writeFile(workbook, 'Employee_Import_Template.xlsx')
+  }
+
+  const handleImport = async () => {
+    if (!importFile) return
+    setIsImporting(true)
+    setImportResult(null)
+
+    try {
+      const data = await importFile.arrayBuffer()
+      const workbook = XLSX.read(data)
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+
+      if (rows.length === 0) {
+        showToast('error', 'Import Failed', 'The file contains no data rows')
+        setIsImporting(false)
+        return
+      }
+
+      const employees = rows.map((row: any) => ({
+        firstName: row['First Name'] || row['FirstName'] || row['firstName'] || '',
+        lastName: row['Last Name'] || row['LastName'] || row['lastName'] || '',
+        middleName: row['Middle Name'] || row['MiddleName'] || row['middleName'] || null,
+        suffix: row['Suffix'] || row['suffix'] || null,
+        gender: row['Gender'] || row['gender'] || null,
+        dateOfBirth: row['Date of Birth'] || row['DateOfBirth'] || row['dateOfBirth'] || null,
+        email: row['Email'] || row['email'] || null,
+        role: row['Role'] || row['role'] || 'USER',
+        department: row['Department'] || row['department'] || null,
+        position: row['Position'] || row['position'] || null,
+        branch: row['Branch'] || row['branch'] || null,
+        contactNumber: row['Contact Number'] || row['ContactNumber'] || row['contactNumber'] || null,
+        employeeNumber: row['Employee Number'] || row['EmployeeNumber'] || row['employeeNumber'] || null,
+        hireDate: row['Hire Date'] || row['HireDate'] || row['hireDate'] || null,
+        employmentStatus: row['Employment Status'] || row['EmploymentStatus'] || row['employmentStatus'] || 'ACTIVE',
+        shiftId: row['Shift ID'] || row['ShiftId'] || row['shiftId'] ? parseInt(row['Shift ID'] || row['ShiftId'] || row['shiftId'], 10) : null,
+      }))
+
+      const res = await fetch('/api/employees/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ employees }),
+      })
+
+      const result = await res.json()
+
+      if (result.imported?.length > 0) {
+        showToast('success', 'Import Complete', `${result.imported.length} employee(s) imported successfully`)
+        if (result.errors?.length > 0) {
+          showToast('warning', 'Partial Import', `${result.errors.length} row(s) had errors`)
+        }
+        await fetchEmployees()
+      } else {
+        showToast('error', 'Import Failed', result.errors?.[0]?.errors?.join(', ') || 'No valid rows found')
+      }
+
+      setImportResult({ imported: result.imported || [], errors: result.errors || [] })
+    } catch (error) {
+      console.error('Import error:', error)
+      showToast('error', 'Import Failed', 'An unexpected error occurred')
+    } finally {
+      setIsImporting(false)
     }
   }
 
@@ -739,7 +826,7 @@ export default function EmployeesPage() {
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           {/* Import Excel Button */}
-          <Dialog open={isImportOpen} onOpenChange={(open) => { setIsImportOpen(open); if (!open) { setImportFile(null); } }}>
+          <Dialog open={isImportOpen} onOpenChange={(open) => { setIsImportOpen(open); if (!open) { setImportFile(null); setImportResult(null); } }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="flex-1 sm:flex-none border-border text-foreground hover:bg-red-700 gap-2">
                 <Upload className="w-4 h-4" />
@@ -752,7 +839,7 @@ export default function EmployeesPage() {
                   <DialogTitle className="text-white font-bold text-lg">Import Employees</DialogTitle>
                   <DialogDescription className="text-white/80 text-[10px] uppercase tracking-widest font-bold mt-1">Upload from Excel or CSV</DialogDescription>
                 </div>
-                <button onClick={() => { setIsImportOpen(false); setImportFile(null); }} className="text-white/80 hover:text-white transition-colors">
+                <button onClick={() => { setIsImportOpen(false); setImportFile(null); setImportResult(null); }} className="text-white/80 hover:text-white transition-colors">
                   <XIcon className="w-5 h-5" />
                 </button>
               </div>
@@ -771,7 +858,7 @@ export default function EmployeesPage() {
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (file) setImportFile(file)
+                        if (file) { setImportFile(file); setImportResult(null); }
                       }}
                     />
                   </label>
@@ -784,25 +871,49 @@ export default function EmployeesPage() {
                     <span className="text-xs text-slate-400">{(importFile.size / 1024).toFixed(1)} KB</span>
                   </div>
                 )}
+                {importResult && (
+                  <div className="space-y-3">
+                    {importResult.imported.length > 0 && (
+                      <div className="p-4 bg-green-50 rounded-xl">
+                        <p className="text-sm font-bold text-green-700">
+                          ✓ {importResult.imported.length} employee(s) imported
+                        </p>
+                      </div>
+                    )}
+                    {importResult.errors.length > 0 && (
+                      <div className="p-4 bg-red-50 rounded-xl max-h-48 overflow-y-auto">
+                        <p className="text-sm font-bold text-red-700 mb-2">
+                          ✗ {importResult.errors.length} row(s) failed
+                        </p>
+                        {importResult.errors.map((err: any, i: number) => (
+                          <p key={i} className="text-xs text-red-600 mb-1">
+                            Row {err.row + 2}: {err.data?.firstName || 'Unknown'} — {err.errors.join(', ')}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="text-center">
+                  <button
+                    onClick={downloadTemplate}
+                    className="text-sm text-red-500 font-bold hover:underline"
+                  >
+                    Download Template
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-center gap-6 px-6 py-4 border-t border-slate-100">
                 <button
                   className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors"
-                  onClick={() => { setIsImportOpen(false); setImportFile(null); }}
+                  onClick={() => { setIsImportOpen(false); setImportFile(null); setImportResult(null); }}
                 >
                   Discard
                 </button>
                 <button
                   className="px-8 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-50"
                   disabled={!importFile || isImporting}
-                  onClick={() => {
-                    setIsImporting(true)
-                    setTimeout(() => {
-                      setIsImporting(false)
-                      setIsImportOpen(false)
-                      setImportFile(null)
-                    }, 1500)
-                  }}
+                  onClick={handleImport}
                 >
                   {isImporting ? 'Importing...' : 'Upload & Import'}
                 </button>

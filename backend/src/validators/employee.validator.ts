@@ -31,3 +31,13 @@ export const enrollCardValidator = [
         .isInt({ min: 1, max: 4294967295 })
         .withMessage('Card number must be a valid uint32 (1–4294967295)'),
 ];
+
+export const importEmployeesValidator = [
+    body('employees').isArray({ min: 1, max: 1000 }).withMessage('employees must be an array of 1-1000 items'),
+    body('employees.*.firstName').notEmpty().withMessage('First Name is required').trim(),
+    body('employees.*.lastName').notEmpty().withMessage('Last Name is required').trim(),
+    body('employees.*.email').optional({ nullable: true, values: false }).isEmail().withMessage('Valid email is required').normalizeEmail(),
+    body('employees.*.role').optional({ nullable: true, values: false }).isIn(['USER', 'ADMIN', 'HR']).withMessage('Invalid role'),
+    body('employees.*.employmentStatus').optional({ nullable: true, values: false }).isIn(['ACTIVE', 'INACTIVE', 'TERMINATED']).withMessage('Invalid status'),
+    body('employees.*.shiftId').optional({ nullable: true, values: false }).isInt({ min: 1 }).withMessage('shiftId must be a positive integer'),
+];

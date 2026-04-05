@@ -249,6 +249,73 @@ export const employeesApi = {
       { method: 'POST', body: JSON.stringify({ cardNumber }) }
     )
   },
+
+  import(payload: ImportPayload) {
+    return apiFetch<ImportResponse>(
+      '/api/employees/import',
+      { method: 'POST', body: JSON.stringify(payload) }
+    )
+  },
+}
+
+export interface ImportEmployeePayload {
+  firstName: string
+  lastName: string
+  middleName?: string | null
+  suffix?: string | null
+  gender?: string | null
+  dateOfBirth?: string | null
+  email?: string | null
+  role?: string
+  department?: string | null
+  position?: string | null
+  branch?: string | null
+  contactNumber?: string | null
+  employeeNumber?: string | null
+  hireDate?: string | null
+  employmentStatus?: string
+  shiftId?: number | null
+}
+
+export interface ImportPayload {
+  employees: ImportEmployeePayload[]
+}
+
+export interface ImportResponse {
+  success: boolean
+  message: string
+  imported: Array<{ id: number; firstName: string; lastName: string; email: string | null; employeeNumber: string | null }>
+  errors: Array<{ row: number; data: any; errors: string[] }>
+}
+
+export interface ImportEmployeePayload {
+  firstName: string
+  lastName: string
+  middleName?: string | null
+  suffix?: string | null
+  gender?: string | null
+  dateOfBirth?: string | null
+  email?: string | null
+  role?: string
+  department?: string | null
+  position?: string | null
+  branch?: string | null
+  contactNumber?: string | null
+  employeeNumber?: string | null
+  hireDate?: string | null
+  employmentStatus?: string
+  shiftId?: number | null
+}
+
+export interface ImportPayload {
+  employees: ImportEmployeePayload[]
+}
+
+export interface ImportResponse {
+  success: boolean
+  message: string
+  imported: Array<{ id: number; firstName: string; lastName: string; email: string | null; employeeNumber: string | null }>
+  errors: Array<{ row: number; data: any; errors: string[] }>
 }
 
 // ─── Attendance ──────────────────────────────────────────────────────────────
